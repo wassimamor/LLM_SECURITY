@@ -1,0 +1,8 @@
+venv/
+.venv/
+__pycache__/
+.cache/
+*.bin
+*.pth
+*.zip
+.git/
