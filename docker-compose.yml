@@ -3,18 +3,25 @@ services:
     build: .
     container_name: pfa_api
     volumes:
-      - .:/app  # Maps your local folder to /app inside Docker
+      - .:/app
     ports:
       - "8000:8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    # Lancement de l'API avec uvicorn
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
 
   dashboard:
     build: .
     container_name: pfa_dashboard
+    # Le dashboard démarre après l'API, mais ne la surveille plus agressivement
     depends_on:
       - api
     volumes:
       - .:/app
     ports:
       - "8501:8501"
-    command: streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    environment:
+      - API_URL=http://api:8000/ask
+    # Lancement de Streamlit
+    command: python -m streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    restart: unless-stopped

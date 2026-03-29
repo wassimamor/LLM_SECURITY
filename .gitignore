@@ -1,0 +1,8 @@
+# On ignore le dossier du modèle et les fichiers lourds
+mistral_pfa_model/
+*.safetensors
+*.bin
+*.pth
+venv/
+.venv/
+__pycache__/

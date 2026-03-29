@@ -1,8 +1,42 @@
+# Environnements virtuels (Très lourds, à ignorer absolument)
 venv/
 .venv/
+env/
+ENV/
+
+# Cache Python et IDE
 __pycache__/
-.cache/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.vscode/
+.idea/
+
+# Données et Modèles (On les gère via les volumes Docker)
+# Ne pas copier le modèle lourd dans l'image elle-même !
+mistral_pfa_model/
 *.bin
 *.pth
+*.onnx
+*.weights
 *.zip
+*.7z
+*.tar
+
+# Logs et rapports (Données temporaires)
+*.log
+security_logs.txt
+outputs/
+reports/
+
+# Git et Docker
 .git/
+.gitignore
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Système (Windows/Mac)
+Thumbs.db
+desktop.ini
+.DS_Store
