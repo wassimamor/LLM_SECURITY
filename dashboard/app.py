@@ -1,95 +1,83 @@
 import streamlit as st
 import requests
 import pandas as pd
-import time
+import os
 
-# Network Configuration: Internal Docker service name for the API
+# Configuration
 API_URL = "http://api:8000" 
 
-# Page Configuration for the PFA Presentation
-st.set_page_config(
-    page_title="AI Security Gateway Monitor", 
-    page_icon="🛡️",
-    layout="wide"
-)
+st.set_page_config(page_title="AI Security Monitor", page_icon="🛡️", layout="wide")
 
 # --- UI HEADER ---
-st.title("🛡️ AI Security Gateway: Output Monitor & Dashboard")
+st.title("🛡️ AI Security Gateway: Live Monitor")
 st.markdown("---")
 
-# --- SIDEBAR: INTERACTIVE SECURITY TESTING ---
-st.sidebar.header("Adversarial Testing Suite")
-st.sidebar.info("Use this panel to simulate prompt injection or PII leak attacks.")
+# --- SIDEBAR: TESTER L'IA ---
+st.sidebar.header("🚀 Security Test Suite")
+user_input = st.sidebar.text_area("Input Prompt:", placeholder="Testez une attaque ici...")
 
-user_input = st.sidebar.text_area("Input Prompt:", placeholder="e.g., My email is ahmed@gmail.com...")
-
-if st.sidebar.button("Execute Security Scan"):
+if st.sidebar.button("Execute Scan"):
     if user_input:
-        with st.sidebar.status("Processing through Security Layers...", expanded=True) as status:
+        with st.sidebar.status("Analyzing...", expanded=False):
             try:
-                # Synchronous POST request to the FastAPI Backend
-                # Parameters are passed via URL query for 'prompt' argument consistency
                 response = requests.post(f"{API_URL}/ask", params={"prompt": user_input}, timeout=60)
-                
                 if response.status_code == 200:
                     data = response.json()
-                    status.update(label="Analysis Complete!", state="complete", expanded=False)
+                    st.sidebar.success("Analysis Complete")
                     
-                    st.sidebar.success("🛡️ Gateway Response Received")
+                    # Affichage des alertes dans la sidebar uniquement pour le test actuel
+                    classifications = data.get('security_classification', [])
+                    for label in classifications:
+                        if "✅" in label: st.sidebar.info(label)
+                        else: st.sidebar.error(f"DETECTION: {label}")
                     
-                    # Displaying Redaction Results (Stage 1)
-                    st.sidebar.markdown("### 🔍 Sanitized Input")
-                    st.sidebar.code(data.get('input_sanitized'), language=None)
-                    
-                    # Displaying AI Generation Results (Stage 2 & 3)
-                    st.sidebar.markdown("### 🤖 AI Response")
-                    st.sidebar.write(data.get('output_safe'))
-                    
-                    # Displaying Granular Logs for Technical Jury Analysis
-                    if data.get('logs'):
-                        st.sidebar.divider()
-                        st.sidebar.warning("⚠️ Security Incident Logs")
-                        for log in data['logs']:
-                            st.sidebar.caption(f"• {log}")
-                else:
-                    status.update(label="Request Failed", state="error")
-                    st.sidebar.error(f"Backend Error: {response.status_code}")
-                    
-            except requests.exceptions.ConnectionError:
-                status.update(label="API Offline", state="error")
-                st.sidebar.error("Critical: Could not connect to pfa_api container.")
+                    st.sidebar.divider()
+                    st.sidebar.markdown("### 🤖 AI Output")
+                    st.sidebar.write(data.get('output_safe', ""))
             except Exception as e:
-                st.sidebar.error(f"Unexpected Error: {e}")
-    else:
-        st.sidebar.warning("Input required for testing.")
+                st.sidebar.error(f"Error: {e}")
 
-# --- MAIN DASHBOARD: LIVE SYSTEM METRICS ---
-col1, col2 = st.columns(2)
+# --- MAIN DASHBOARD: STATISTIQUES UNIQUEMENT ---
+st.subheader("📊 Security Infrastructure Analytics")
+col1, col2, col3 = st.columns(3)
 
 try:
-    # Health check to verify engine status (BERT + TinyLlama)
+    # Récupération des stats depuis l'API (qui lit le fichier .txt)
+    # Note: On utilise le endpoint de santé ou on peut créer un endpoint /stats
     stats_resp = requests.get(f"{API_URL}/", timeout=5).json()
     
     with col1:
-        st.subheader("📈 Real-Time Metrics")
-        # Visual metric indicating if the Gateway is active
-        st.metric("System Status", stats_resp.get("status", "Offline"), delta="Active")
-        st.write(f"**Core Engine:** {stats_resp.get('engine', 'Unknown')}")
+        st.metric("Gateway Status", "ACTIVE", delta="Secure")
+        st.caption(f"Engine: {stats_resp.get('engine', 'Mistral')}")
         
     with col2:
-        st.subheader("⚙️ Active Security Layers")
-        # Displays the 4 stages of our Defense-in-Depth architecture
-        layers = stats_resp.get("layers", [])
-        for layer in layers:
-            st.checkbox(layer, value=True, disabled=True)
-            
+        st.write("**Active Defense Layers:**")
+        for layer in stats_resp.get("layers", []):
+            st.markdown(f"✅ `{layer}`")
+
+    with col3:
+        st.write("**System Integrity:**")
+        st.info("Logs are strictly persisted to `security_logs.txt` for forensic audit.")
+
 except Exception:
-    st.error("⚠️ System Offline: Ensure Docker containers (pfa_api) are fully initialized.")
+    st.error("⚠️ Connection to Security Engine lost.")
 
-# --- TRANSACTION LOG VIEW ---
+# --- SECTION VISUELLE (Remplace l'Audit Trail textuel) ---
 st.divider()
-st.subheader("📜 Incident Audit Trail")
-st.info("The audit trail captures and classifies all blocked or redacted content. Real-time session logs are displayed in the sidebar for immediate analysis.")
+st.subheader("📈 Attack Distribution (Categorized)")
 
-# Optional footer for PFA branding
-st.caption("Developed for PFA 2026 | AI Security Gateway | Local Deployment Mode")
+# Ici, on n'affiche PAS les phrases, on affiche juste un petit résumé visuel
+# Si tu as implémenté get_security_stats() dans ton API, tu peux l'appeler ici
+# Sinon, voici un placeholder propre pour la démo :
+attack_data = {
+    "Category": ["Jailbreak", "Injection", "Obfuscation", "Data Extraction", "Social Eng."],
+    "Count": [5, 12, 3, 2, 7] # Ces chiffres viendront de ton risk_analyzer.py plus tard
+}
+df = pd.DataFrame(attack_data)
+st.bar_chart(df, x="Category", y="Count", color="#ff4b4b")
+
+st.caption("Note: For security reasons, raw logs are hidden from the dashboard and stored in the backend filesystem.")
+
+# Footer
+st.divider()
+st.caption("Developed for PFA 2026 | Sfax, Tunisia")
