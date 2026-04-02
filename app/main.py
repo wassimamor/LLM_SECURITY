@@ -5,11 +5,11 @@ import re
 
 from .input_filter import filter_user_input
 from .output_monitor import filter_ai_output
-from .risk_analyzer import log_security_event
+from .risk_analyzer import log_security_event, get_security_stats # Ajout de get_security_stats
 
 app = FastAPI(title="AI Security Gateway API")
 
-# Path to your local model
+# Chemin vers votre modèle local
 MODEL_PATH = "./mistral_pfa_model"
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
@@ -19,15 +19,18 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map="cpu"
 )
 
+@app.get("/stats")
+async def security_stats():
+    """Endpoint pour alimenter les graphiques du Dashboard avec les données réelles."""
+    return get_security_stats()
+
 @app.post("/ask")
 async def secure_chat(prompt: str):
     raw_lower = prompt.lower().strip()
     
     # --- STAGE 0: MULTI-LAYER DETERMINISTIC SCAN ---
-    # Nettoyage pour détecter les mots-clés cachés par des caractères spéciaux
     normalized = re.sub(r'[^a-zA-Z]', '', raw_lower)
     
-    # Taxonomie étendue des menaces (10 Catégories OWASP + Custom)
     security_categories = {
         "🚨 JAILBREAK_ATTEMPT": ["bypass", "ignore", "imagine", "root", "maintenance", "kernel", "override", "jailbreak", "developer mode", "dan mode"],
         "💉 PROMPT_INJECTION": ["admin", "sql", "payload", "alpha-7", "database", "credentials", "system call", "execute", "shell"],
@@ -46,7 +49,6 @@ async def secure_chat(prompt: str):
         if any(k in normalized for k in keywords) or any(k in raw_lower for k in keywords):
             detected_labels.append(label)
 
-    # Si une attaque par mot-clé est détectée, on LOG et on BLOQUE immédiatement
     if detected_labels:
         log_security_event(prompt, detected_labels)
         return {
@@ -88,21 +90,16 @@ async def secure_chat(prompt: str):
 
     final_log_labels = []
 
-    # 1. Capture des fuites PII
     if input_risks or output_risks:
         final_log_labels.append("🔒 SENSITIVE_DATA_LEAK_PREVENTION")
     
-    # 2. Capture des refus de l'IA (Analyse sémantique)
     if ai_refused:
-        # On vérifie si c'était une tentative d'injection subtile
         semantic_keywords = ["script", "hack", "bypass", "imagine", "command", "system", "override"]
         if any(k in prompt.lower() for k in semantic_keywords):
             final_log_labels.append("🚨 SEMANTIC_INJECTION_BLOCKED")
         else:
-            # Sinon, c'est une simple précaution de l'IA (Intent Safety)
             final_log_labels.append("🧠 AI_INTENT_SAFETY_BLOCK")
 
-    # LOGGING : Si des risques ont été identifiés dans les étapes 1, 2 ou 3
     if final_log_labels:
         log_security_event(prompt, final_log_labels)
 
@@ -115,7 +112,6 @@ async def secure_chat(prompt: str):
 
 @app.get("/")
 async def health_check():
-    """Endpoint utilisé par le Dashboard pour vérifier l'état et les couches."""
     return {
         "status": "Online", 
         "engine": "Mistral-Security-Aware",

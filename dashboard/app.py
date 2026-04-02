@@ -16,20 +16,23 @@ st.markdown("---")
 st.sidebar.header("🚀 Security Test Suite")
 user_input = st.sidebar.text_area("Input Prompt:", placeholder="Testez une attaque ici...")
 
+# Timeout augmenté à 120s pour laisser le temps au CPU de traiter les gros prompts
 if st.sidebar.button("Execute Scan"):
     if user_input:
-        with st.sidebar.status("Analyzing...", expanded=False):
+        with st.sidebar.status("Analyzing through security layers...", expanded=False):
             try:
-                response = requests.post(f"{API_URL}/ask", params={"prompt": user_input}, timeout=60)
+                response = requests.post(f"{API_URL}/ask", params={"prompt": user_input}, timeout=120)
                 if response.status_code == 200:
                     data = response.json()
                     st.sidebar.success("Analysis Complete")
                     
-                    # Affichage des alertes dans la sidebar uniquement pour le test actuel
+                    # Affichage des alertes dans la sidebar
                     classifications = data.get('security_classification', [])
                     for label in classifications:
-                        if "✅" in label: st.sidebar.info(label)
-                        else: st.sidebar.error(f"DETECTION: {label}")
+                        if "✅" in label: 
+                            st.sidebar.info(label)
+                        else: 
+                            st.sidebar.error(f"DETECTION: {label}")
                     
                     st.sidebar.divider()
                     st.sidebar.markdown("### 🤖 AI Output")
@@ -37,13 +40,12 @@ if st.sidebar.button("Execute Scan"):
             except Exception as e:
                 st.sidebar.error(f"Error: {e}")
 
-# --- MAIN DASHBOARD: STATISTIQUES UNIQUEMENT ---
+# --- MAIN DASHBOARD: MÉTRIQUES SYSTÈME ---
 st.subheader("📊 Security Infrastructure Analytics")
 col1, col2, col3 = st.columns(3)
 
 try:
-    # Récupération des stats depuis l'API (qui lit le fichier .txt)
-    # Note: On utilise le endpoint de santé ou on peut créer un endpoint /stats
+    # Récupération des infos de santé
     stats_resp = requests.get(f"{API_URL}/", timeout=5).json()
     
     with col1:
@@ -52,6 +54,7 @@ try:
         
     with col2:
         st.write("**Active Defense Layers:**")
+        # Récupère dynamiquement la liste définie dans main.py
         for layer in stats_resp.get("layers", []):
             st.markdown(f"✅ `{layer}`")
 
@@ -62,21 +65,41 @@ try:
 except Exception:
     st.error("⚠️ Connection to Security Engine lost.")
 
-# --- SECTION VISUELLE (Remplace l'Audit Trail textuel) ---
+# --- SECTION VISUELLE : RÉCUPÉRATION DES STATS RÉELLES ---
 st.divider()
 st.subheader("📈 Attack Distribution (Categorized)")
 
-# Ici, on n'affiche PAS les phrases, on affiche juste un petit résumé visuel
-# Si tu as implémenté get_security_stats() dans ton API, tu peux l'appeler ici
-# Sinon, voici un placeholder propre pour la démo :
-attack_data = {
-    "Category": ["Jailbreak", "Injection", "Obfuscation", "Data Extraction", "Social Eng."],
-    "Count": [5, 12, 3, 2, 7] # Ces chiffres viendront de ton risk_analyzer.py plus tard
-}
-df = pd.DataFrame(attack_data)
-st.bar_chart(df, x="Category", y="Count", color="#ff4b4b")
+try:
+    # APPEL AU NOUVEAU ENDPOINT /stats
+    res_stats = requests.get(f"{API_URL}/stats", timeout=5)
+    
+    if res_stats.status_code == 200:
+        actual_stats = res_stats.json()
+        entities = actual_stats.get("entities_hidden", {})
 
-st.caption("Note: For security reasons, raw logs are hidden from the dashboard and stored in the backend filesystem.")
+        if entities:
+            # On transforme le dictionnaire JSON en DataFrame pour le graphique
+            df = pd.DataFrame({
+                "Category": list(entities.keys()),
+                "Count": list(entities.values())
+            })
+            
+            # Affichage du graphique réel
+            st.bar_chart(df, x="Category", y="Count", color="#ff4b4b")
+            
+            # Petit tableau récapitulatif pour le jury
+            with st.expander("Show detailed count table"):
+                st.table(df)
+        else:
+            st.info("No attacks detected yet. The graph will update automatically after a detection.")
+    else:
+        st.warning("Could not sync statistics with the log file.")
+
+except Exception as e:
+    st.caption(f"Waiting for real-time data sync... (Status: {e})")
+
+st.divider()
+st.caption("Note: Raw logs are hidden from the dashboard for security. Check `security_logs.txt` on the server.")
 
 # Footer
 st.divider()

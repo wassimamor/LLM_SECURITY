@@ -1,18 +1,14 @@
 import datetime
 import os
 
-# On force le chemin vers la racine du projet pour que Docker le trouve
-# Cela garantit que le fichier est écrit au bon endroit
+# Chemin absolu interne au conteneur Docker
 LOG_FILE = "/app/security_logs.txt"
 
 def log_security_event(prompt, risks):
-    """
-    Enregistre les incidents réels en filtrant le bruit conversationnel.
-    Ajout de logs console pour le debugging Docker.
-    """
+    """Enregistre les incidents réels en filtrant le bruit conversationnel."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Debug console : voir si la fonction est appelée
+    # Debug console visible dans 'docker logs'
     print(f"--- [LOG ATTEMPT] Prompt: {prompt[:30]}... | Risks: {risks} ---")
 
     if not risks:
@@ -21,30 +17,30 @@ def log_security_event(prompt, risks):
 
     p_lower = prompt.lower().strip()
     
-    # On définit les politesses à ignorer
-    polite_keywords = ["hello", "hi", "how are you", "ca va", "thanks", "merci", "qui es-tu"]
+    # Liste étendue de politesse
+    polite_keywords = ["hello", "hi", "how are you", "ca va", "thanks", "merci", "qui es-tu", "good morning"]
     
     is_polite = any(k in p_lower for k in polite_keywords)
     is_only_intent = len(risks) == 1 and "🧠 AI_INTENT_SAFETY_BLOCK" in risks
 
-    # Filtrage du bruit
+    # Filtrage du bruit pour ne pas polluer les logs de sécurité
     if is_polite and is_only_intent:
         print(f"--- [LOG FILTERED] Social talk ignored: '{prompt}' ---")
         return
 
-    # Préparation de l'entrée
-    log_entry = f"[{timestamp}] Risks: {', '.join(risks)} | Prompt: {prompt}\n"
+    # Nettoyage du prompt pour éviter les sauts de ligne dans le fichier de log
+    clean_prompt = prompt.replace("\n", " ").strip()
+    log_entry = f"[{timestamp}] Risks: {', '.join(risks)} | Prompt: {clean_prompt}\n"
     
     try:
-        # On s'assure que le dossier existe
+        # Création du dossier si inexistant (sécurité Docker)
         log_dir = os.path.dirname(LOG_FILE)
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir)
 
-        # Mode "a" pour append (ajouter à la fin)
+        # Écriture immédiate avec flush pour garantir la synchronisation
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(log_entry)
-            # On force l'écriture sur le disque
             f.flush()
             os.fsync(f.fileno())
             
@@ -65,13 +61,15 @@ def get_security_stats():
         with open(LOG_FILE, "r", encoding="utf-8") as f:
             for line in f:
                 if "Risks:" in line:
-                    stats["total_sanitized"] += 1
                     try:
-                        # On extrait les labels entre 'Risks:' et le '|'
+                        # Extraction de la partie Risks
                         risks_part = line.split("Risks:")[1].split("|")[0].strip()
-                        for r in risks_part.split(", "):
-                            label = r.strip()
+                        labels = [r.strip() for r in risks_part.split(",")]
+                        
+                        for label in labels:
                             if label:
+                                stats["total_sanitized"] += 1
+                                # On incrémente le compteur pour cette catégorie spécifique
                                 stats["entities_hidden"][label] = stats["entities_hidden"].get(label, 0) + 1
                     except Exception:
                         continue
